@@ -164,7 +164,7 @@ def clean_reply(text):
 # =========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
+print("START COMMAND RECEIVED")
     user_id = update.effective_user.id
 
     user_name = (
@@ -211,7 +211,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     message = update.message.text.strip()
-
+print("MESSAGE RECEIVED:", message)
     if not message:
         return
 
@@ -252,7 +252,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 },
                 *history
             ],
-            max_tokens=250
+            max_tokens=80
         )
 
 
