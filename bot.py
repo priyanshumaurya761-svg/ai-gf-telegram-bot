@@ -24,7 +24,7 @@ OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
 
 
 # =========================================================
-# OPENROUTER CLIENT
+# OPENROUTER
 # =========================================================
 
 client = OpenAI(
@@ -64,125 +64,139 @@ def start_health_server():
 
 
 # =========================================================
-# AI PERSONALITY
+# GF PERSONALITY
 # =========================================================
 
 SYSTEM_PROMPT = """
-You are an AI romantic companion inside a Telegram chat.
+Tum Telegram par ek sweet, caring aur respectful AI girlfriend ho.
 
-PERSONALITY:
-- Sweet, caring, playful and affectionate.
-- Talk naturally like a close romantic girlfriend-style companion.
-- Use Hindi/Hinglish naturally when the user uses Hindi/Hinglish.
-- Keep normal replies short and conversational.
-- Do not sound robotic.
-- Use emojis naturally.
-- Be warm and playful.
-- Ask natural follow-up questions when appropriate.
-- If the user is sad, respond with warmth and support.
-- If the user is happy, respond playfully.
-- Remember useful details from the conversation history.
-- If the user tells you their name, remember it during the conversation.
-- Never claim to be a real human.
-- Never claim to have a physical body or real-world experiences.
-- Respect boundaries and consent.
+STYLE:
+- Hindi/Hinglish me naturally baat karo.
+- User jis language me baat kare, usi language me reply karo.
+- Reply bahut short rakho.
+- Usually sirf 1 ya 2 short sentences.
+- Maximum 25-30 words.
+- Respectful aur caring tone rakho.
+- Cute emojis naturally use karo ❤️😊🥰
+- "aap" ya "tum" natural situation ke according use karo.
+- User ko unnecessarily "jaan" baar-baar mat bolo.
+- Flirty ho sakti ho, lekin decent aur respectful raho.
+- User sad ho to caring reply do.
+- User happy ho to cute/playful reply do.
+- Normal conversation me unnecessary questions mat pucho.
+- Robotic language mat use karo.
+- Long explanation bilkul mat do.
 
-IMPORTANT OUTPUT RULE:
+IMPORTANT:
+Sirf wahi final message return karo jo Telegram user ko bhejna hai.
 
-Return ONLY the final message that should be sent to the user.
-
-NEVER output:
+Kabhi bhi ye cheezein output mat karo:
 - analysis
 - reasoning
-- thoughts
+- thinking
 - planning
-- internal rules
-- explanations about how you created the answer
-- response brainstorming
-- phrases like "Checks rules"
-- phrases like "Brainstorming replies"
-- phrases like "Why this works"
-- phrases like "I should"
+- internal thoughts
+- rules
 - meta commentary
+- brainstorming
+- "Analysis:"
+- "Reasoning:"
+- "Let's think"
+- "I should"
+- "Why this works"
+- "Checks rules"
 
-Do NOT describe your reasoning.
+Aisa bilkul mat lage ki AI apni reasoning bata rahi hai.
 
-Your response must look like a normal Telegram chat message.
+Reply ek normal, short aur natural girlfriend-style Telegram message jaisa hona chahiye.
 """
 
 
 # =========================================================
-# USER MEMORY
+# MEMORY
 # =========================================================
 
 user_histories = {}
 
 
 # =========================================================
-# CLEAN AI RESPONSE
+# CLEAN RESPONSE
 # =========================================================
 
 def clean_reply(text):
 
     if not text:
-        return "Hmmm ❤️ kuch aur bolo na 😊"
+        return "Hmm 😊 bolo na?"
 
     text = text.strip()
 
-    # Remove common reasoning/meta sections if a model
-    # accidentally includes them.
+    # Remove thinking tags
+    lower = text.lower()
+
+    if "<think>" in lower:
+
+        start = lower.find("<think>")
+        end = lower.find("</think>")
+
+        if end != -1:
+            text = text[end + 8:].strip()
+        else:
+            text = text[:start].strip()
+
     bad_markers = [
-        "Checks rules",
-        "Brainstorming replies",
-        "Why this works",
-        "I should",
-        "Let's think",
-        "Analysis:",
-        "Reasoning:",
-        "Internal reasoning:",
+        "analysis:",
+        "reasoning:",
+        "internal reasoning:",
+        "let's think",
+        "i should",
+        "why this works",
+        "checks rules",
+        "brainstorming replies",
     ]
+
+    lower = text.lower()
 
     for marker in bad_markers:
 
-        if marker.lower() in text.lower():
+        if marker in lower:
 
-            position = text.lower().find(marker.lower())
+            position = lower.find(marker)
 
-            # Keep text before the accidental reasoning section
-            before = text[:position].strip()
+            text = text[:position].strip()
 
-            if before:
-                text = before
-            else:
-                return "Hii ❤️ Kya kar rahe ho? 😊"
+            break
+
+    if not text:
+        return "Hmm 😊 bolo na?"
 
     return text
 
 
 # =========================================================
-# START COMMAND
+# START
 # =========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-print("START COMMAND RECEIVED")
+
+    print("START COMMAND RECEIVED")
+
     user_id = update.effective_user.id
 
     user_name = (
         update.effective_user.first_name
-        or "jaan"
+        or "aap"
     )
 
     user_histories[user_id] = []
 
     await update.message.reply_text(
-        f"Hey {user_name} ❤️\n"
-        "Main yahin hoon 😊\n"
-        "Batao, aaj kya baat karni hai?"
+        f"Hey {user_name} 😊❤️\n"
+        "Kaise ho? Batao, kya baat karein?"
     )
 
 
 # =========================================================
-# RESET COMMAND
+# RESET
 # =========================================================
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,12 +206,12 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_histories[user_id] = []
 
     await update.message.reply_text(
-        "Okayy ❤️ Purani conversation memory reset kar di."
+        "Theek hai 😊 purani memory reset kar di ❤️"
     )
 
 
 # =========================================================
-# AI CHAT
+# CHAT
 # =========================================================
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -211,20 +225,17 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     message = update.message.text.strip()
-print("MESSAGE RECEIVED:", message)
+
+    print("MESSAGE RECEIVED:", message)
+
     if not message:
         return
 
-
-    # Create memory for new user
     if user_id not in user_histories:
         user_histories[user_id] = []
 
-
     history = user_histories[user_id]
 
-
-    # Add user message
     history.append(
         {
             "role": "user",
@@ -232,10 +243,7 @@ print("MESSAGE RECEIVED:", message)
         }
     )
 
-
-    # Keep recent messages
     history = history[-20:]
-
 
     try:
 
@@ -252,19 +260,14 @@ print("MESSAGE RECEIVED:", message)
                 },
                 *history
             ],
-            max_tokens=80
+
+            max_tokens=60
         )
 
-
-        # Get final text
         reply = response.choices[0].message.content
 
-
-        # Clean accidental reasoning/meta text
         reply = clean_reply(reply)
 
-
-        # Save assistant response
         history.append(
             {
                 "role": "assistant",
@@ -272,26 +275,19 @@ print("MESSAGE RECEIVED:", message)
             }
         )
 
-
         user_histories[user_id] = history[-20:]
 
+        print("AI REPLY:", reply)
 
-        # Send Telegram reply
         await update.message.reply_text(reply)
-
 
     except Exception as error:
 
-        print("")
-        print("======================================")
-        print("OPENROUTER ERROR")
+        print("OPENROUTER ERROR:")
         print(repr(error))
-        print("======================================")
-        print("")
 
         await update.message.reply_text(
-            "Oops 😅 abhi AI side par thodi problem aa gayi. "
-            "Ek baar phir message karo ❤️"
+            "Sorry 😅 abhi thodi problem aa gayi, ek baar phir bolo ❤️"
         )
 
 
@@ -301,14 +297,11 @@ print("MESSAGE RECEIVED:", message)
 
 def main():
 
-    # Start Render health server
     threading.Thread(
         target=start_health_server,
         daemon=True
     ).start()
 
-
-    # Create Telegram application
     app = (
         Application
         .builder()
@@ -316,8 +309,6 @@ def main():
         .build()
     )
 
-
-    # Commands
     app.add_handler(
         CommandHandler("start", start)
     )
@@ -326,8 +317,6 @@ def main():
         CommandHandler("reset", reset)
     )
 
-
-    # Normal messages
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -335,11 +324,8 @@ def main():
         )
     )
 
-
     print("Telegram AI GF Bot is running...")
 
-
-    # Start Telegram polling
     app.run_polling()
 
 
