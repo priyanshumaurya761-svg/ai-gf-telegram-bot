@@ -12,7 +12,9 @@ from telegram.ext import (
     filters,
 )
 
-from openai import OpenAI
+import json
+import urllib.request
+import urllib.error
 
 
 # =========================================================
@@ -20,17 +22,83 @@ from openai import OpenAI
 # =========================================================
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
+GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-lite")
 
 
 # =========================================================
-# OPENROUTER
+# GEMINI
 # =========================================================
 
-client = OpenAI(
-    api_key=OPENROUTER_API_KEY,
-    base_url="https://openrouter.ai/api/v1",
-)
+def gemini_generate(history):
+    """
+    Call Gemini directly over the official REST API.
+    No OpenAI/OpenRouter package is required.
+    """
+    contents = []
+
+    for item in history:
+        role = "model" if item["role"] == "assistant" else "user"
+        contents.append({
+            "role": role,
+            "parts": [{"text": item["content"]}]
+        })
+
+    payload = {
+        "systemInstruction": {
+            "parts": [{"text": SYSTEM_PROMPT}]
+        },
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": 60,
+            "thinkingConfig": {
+                "thinkingBudget": 0
+            }
+        }
+    }
+
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_MODEL}:generateContent"
+    )
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=45) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise RuntimeError(f"Gemini returned no candidates: {data}")
+
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(
+            part.get("text", "")
+            for part in parts
+            if isinstance(part, dict)
+        ).strip()
+
+        if not text:
+            raise RuntimeError(f"Gemini returned empty text: {data}")
+
+        return text
+
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"Gemini HTTP {error.code}: {body}"
+        ) from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Gemini network error: {error}") from error
 
 
 # =========================================================
@@ -247,24 +315,10 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        response = await asyncio.to_thread(
-
-            client.chat.completions.create,
-
-            model="openrouter/free",
-
-            messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT
-                },
-                *history
-            ],
-
-            max_tokens=60
+        reply = await asyncio.to_thread(
+            gemini_generate,
+            history
         )
-
-        reply = response.choices[0].message.content
 
         reply = clean_reply(reply)
 
@@ -283,7 +337,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as error:
 
-        print("OPENROUTER ERROR:")
+        print("GEMINI ERROR:")
         print(repr(error))
 
         await update.message.reply_text(
