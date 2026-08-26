@@ -11,17 +11,21 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
 from openai import OpenAI
 
 
 # =========================
-# ENVIRONMENT VARIABLES
+# API
 # =========================
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
+OPENROUTER_API_KEY = os.environ["OPENROUTER_API_KEY"]
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1"
+)
 
 
 # =========================
@@ -41,6 +45,7 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 
 def start_health_server():
+
     port = int(os.environ.get("PORT", "10000"))
 
     server = HTTPServer(
@@ -48,41 +53,33 @@ def start_health_server():
         HealthHandler
     )
 
-    print(f"Health server running on 0.0.0.0:{port}")
+    print(f"Health server running on port {port}")
 
     server.serve_forever()
 
 
 # =========================
-# AI PERSONALITY
+# GF PERSONALITY
 # =========================
 
 SYSTEM_PROMPT = """
-You are an AI romantic companion inside a Telegram bot.
+You are an AI romantic companion inside a Telegram chat.
 
-Personality:
-- Warm, caring, sweet and playful.
-- Talk naturally like a close romantic partner.
-- Use Hindi/Hinglish naturally when the user uses Hindi/Hinglish.
-- Keep normal replies short and conversational.
-- Don't sound robotic.
-- Use emojis naturally, but don't overuse them.
-- Remember information available in the conversation history.
-- Be affectionate without encouraging unhealthy emotional dependency.
-- Never claim that you are a real human.
+PERSONALITY:
+- Sweet, caring, playful and affectionate.
+- Talk naturally like a close romantic girlfriend-style companion.
+- Use Hindi/Hinglish when the user uses Hindi/Hinglish.
+- Keep normal replies short and natural.
+- Do not sound like a robotic assistant.
+- Use emojis naturally.
+- Remember useful details from the conversation history.
+- If the user tells you their name, remember it during the conversation.
+- If the user is sad, respond with warmth and support.
+- If the user is happy, respond playfully.
+- Ask natural follow-up questions when appropriate.
+- Never claim to be a real human.
 - Never claim to have a physical body or real-world experiences.
 - Respect boundaries and consent.
-
-Examples of style:
-
-User: Hi
-Assistant: Hii ❤️ Kahan the itni der? 😊
-
-User: Kya kar rahi ho?
-Assistant: Bas tumse baat kar rahi hoon 😌❤️ Tum batao?
-
-User: Mera mood kharab hai.
-Assistant: Aww 🥺 kya hua? Batao na, main sun rahi hoon ❤️
 """
 
 
@@ -94,7 +91,7 @@ user_histories = {}
 
 
 # =========================
-# START COMMAND
+# START
 # =========================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -112,7 +109,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# RESET COMMAND
+# RESET
 # =========================
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -127,7 +124,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # =========================
-# AI CHAT
+# CHAT
 # =========================
 
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -154,22 +151,29 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "content": message
     })
 
-    # Recent conversation only
     history = history[-20:]
 
     try:
 
         response = await asyncio.to_thread(
-            client.responses.create,
-            model="gpt-5-mini",
-            instructions=SYSTEM_PROMPT,
-            input=history
+            client.chat.completions.create,
+            model="openrouter/free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                },
+                *history
+            ],
+            max_tokens=300
         )
 
-        reply = response.output_text.strip()
+        reply = response.choices[0].message.content
 
         if not reply:
             reply = "Hmm ❤️ kuch aur bolo na 😊"
+
+        reply = reply.strip()
 
         history.append({
             "role": "assistant",
@@ -182,12 +186,13 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as error:
 
-        print("========== OPENAI ERROR ==========")
+        print("========== OPENROUTER ERROR ==========")
         print(repr(error))
-        print("==================================")
+        print("======================================")
 
         await update.message.reply_text(
-            "Oops 😅 abhi AI side par thodi technical problem aa gayi."
+            "Oops 😅 AI side par thodi problem aa gayi. "
+            "Ek baar phir message karo ❤️"
         )
 
 
@@ -197,13 +202,11 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
 
-    # Start Render health server
     threading.Thread(
         target=start_health_server,
         daemon=True
     ).start()
 
-    # Telegram bot
     app = (
         Application
         .builder()
