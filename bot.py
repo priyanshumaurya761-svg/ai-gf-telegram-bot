@@ -155,20 +155,23 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
 
-        response = await asyncio.to_thread(
-            client.chat.completions.create,
-            model="openrouter/free",
-            messages=[
-                {
-                    "role": "system",
-                    "content": SYSTEM_PROMPT
-                },
-                *history
-            ],
-            max_tokens=300
-        )
+       response = await asyncio.to_thread(
+    client.chat.completions.create,
+    model="openrouter/free",
+    messages=[
+        {
+            "role": "system",
+            "content": SYSTEM_PROMPT
+        },
+        *history
+    ],
+    max_tokens=300,
+    reasoning={
+        "effort": "none"
+    }
+)
 
-        reply = response.choices[0].message.content
+reply = response.choices[0].message.content 
 
         if not reply:
             reply = "Hmm ❤️ kuch aur bolo na 😊"
