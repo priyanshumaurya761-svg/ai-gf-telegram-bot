@@ -252,13 +252,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 },
                 *history
             ],
-
-            max_tokens=250,
-
-            # Disable reasoning where supported.
-            reasoning={
-                "effort": "none"
-            }
+            max_tokens=250
         )
 
 
